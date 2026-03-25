@@ -1,0 +1,10 @@
+location:
+  longitude: 121.5654
+  latitude: 25.0330
+
+capture:
+  timestamp: "2024-07-01 15:00:00"
+  timezone: "Asia/Taipei"
+
+camera:
+  heading: 90.0
