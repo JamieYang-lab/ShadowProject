@@ -1,0 +1,12 @@
+receiver_selection:
+  lower_y_ratio: 0.35
+  min_object_area: 4
+  plane_sample_lower_ratio: 0.5
+  plane_distance_threshold: 0.08
+  sam_min_area: 100
+  sam_lower_overlap_min: 0.25
+  sam_object_overlap_max: 0.2
+  sam_plane_overlap_min: 0.25
+  combine_sam_with_plane: union
+  output_dir: data/intermediate/receiver_masks
+  visualization_dir: data/outputs/visualizations/receiver_masks

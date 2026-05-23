@@ -1,0 +1,11 @@
+numpy
+pandas
+pvlib
+pyyaml
+opencv-python
+Pillow
+torch
+torchvision
+tqdm
+requests
+matplotlib

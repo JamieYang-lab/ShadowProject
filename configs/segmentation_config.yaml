@@ -1,0 +1,10 @@
+segmentation:
+  input_image_dir: data/desobav2/composite
+  output_mask_dir: data/intermediate/sam_masks
+  output_visualization_dir: data/outputs/visualizations/sam
+  model_type: sam2
+  checkpoint_path: null
+  device: cuda
+  mode: automatic
+  max_masks_per_image: 50
+  min_mask_area: 100

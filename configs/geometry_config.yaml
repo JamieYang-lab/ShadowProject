@@ -1,0 +1,10 @@
+geometry:
+  input_image_dir: data/desobav2/composite
+  output_point_map_dir: data/intermediate/point_maps
+  output_depth_dir: data/intermediate/depth_maps
+  output_normal_dir: data/intermediate/normal_maps
+  model_name_or_path: null
+  device: cuda
+  save_depth_png: true
+  save_normal_png: true
+  resize_max_side: null

@@ -1,0 +1,21 @@
+dataset:
+  name: DESOBAv2
+  root: data/desobav2
+  subdirs:
+    composite: composite
+    target: target
+    object_mask: object_mask
+    shadow_mask: shadow_mask
+  image_extensions:
+    - .png
+    - .jpg
+    - .jpeg
+    - .bmp
+
+intermediate:
+  pseudo_light_dir: data/intermediate/pseudo_light
+  sg_params_dir: data/intermediate/sg_params
+  shadow_sketch_dir: data/intermediate/shadow_sketch
+
+outputs:
+  visualization_dir: data/outputs/visualizations

@@ -7,6 +7,9 @@ __pycache__/
 # Jupyter
 .ipynb_checkpoints/
 
+# Test caches
+.pytest_cache/
+
 # VS Code
 .vscode/
 
@@ -32,8 +35,10 @@ logs/
 *.log
 
 # Outputs
+data/desobav2/
 data/outputs/
 data/intermediate/
+outputs/
 results/
 checkpoints/
 

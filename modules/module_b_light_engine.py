@@ -1,36 +1,129 @@
+import sys
+from pathlib import Path
+import re
+from datetime import datetime
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.append(str(PROJECT_ROOT))
+
 import numpy as np
 import pandas as pd
 import pvlib
 import yaml
 
+from utils.math_utils import (
+    normalize,
+    deg2rad,
+    world_to_camera_vector
+)
+
+
+TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
+TIMESTAMP_REGEX = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$")
+
 
 def load_config(config_path: str) -> dict:
-    """
-    讀取 YAML 設定檔
-    """
     with open(config_path, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
+
+    if not isinstance(config, dict):
+        raise ValueError("Config file must contain a YAML mapping at the top level.")
+
     return config
+
+
+def _require_mapping(config: dict, key: str) -> dict:
+    if key not in config:
+        raise KeyError(f"Missing required config section: '{key}'")
+
+    value = config[key]
+    if not isinstance(value, dict):
+        raise ValueError(f"Config section '{key}' must be a mapping.")
+
+    return value
+
+
+def _require_value(section: dict, section_name: str, key: str):
+    if key not in section:
+        raise KeyError(f"Missing required config field: '{section_name}.{key}'")
+    return section[key]
+
+
+def _require_float(section: dict, section_name: str, key: str) -> float:
+    value = _require_value(section, section_name, key)
+
+    try:
+        return float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Config field '{section_name}.{key}' must be numeric.") from exc
+
+
+def _require_timestamp(timestamp: str) -> str:
+    if not isinstance(timestamp, str):
+        raise ValueError("Config field 'capture.timestamp' must be a string.")
+
+    if not TIMESTAMP_REGEX.fullmatch(timestamp):
+        raise ValueError(
+            "Config field 'capture.timestamp' must match 'YYYY-MM-DD HH:MM:SS' "
+            "without any timezone offset."
+        )
+
+    try:
+        datetime.strptime(timestamp, TIMESTAMP_FORMAT)
+    except ValueError as exc:
+        raise ValueError(
+            "Config field 'capture.timestamp' must be a valid local time in "
+            "'YYYY-MM-DD HH:MM:SS' format."
+        ) from exc
+
+    return timestamp
+
+
+def _require_timezone(timezone: str) -> str:
+    if not isinstance(timezone, str) or not timezone.strip():
+        raise ValueError("Config field 'capture.timezone' must be a non-empty string.")
+
+    try:
+        pd.Timestamp("2024-01-01 00:00:00").tz_localize(timezone)
+    except Exception as exc:
+        raise ValueError(
+            f"Config field 'capture.timezone' is not a valid timezone: '{timezone}'"
+        ) from exc
+
+    return timezone
+
+
+def validate_config_contract(config: dict) -> dict:
+    location = _require_mapping(config, "location")
+    capture = _require_mapping(config, "capture")
+    camera = _require_mapping(config, "camera")
+
+    validated = {
+        "location": {
+            "longitude": _require_float(location, "location", "longitude"),
+            "latitude": _require_float(location, "location", "latitude"),
+        },
+        "capture": {
+            "timestamp": _require_timestamp(_require_value(capture, "capture", "timestamp")),
+            "timezone": _require_timezone(_require_value(capture, "capture", "timezone")),
+        },
+        "camera": {
+            "heading": _require_float(camera, "camera", "heading"),
+            "pitch": float(camera.get("pitch", 0.0)),
+            "roll": float(camera.get("roll", 0.0)),
+        },
+    }
+
+    return validated
 
 
 def get_solar_angles(longitude: float,
                      latitude: float,
                      timestamp: str,
                      timezone: str):
-    """
-    根據經緯度與拍攝時間，計算太陽方位角與高度角
+    localized_time = pd.Timestamp(timestamp).tz_localize(timezone)
+    time = pd.DatetimeIndex([localized_time])
 
-    輸入:
-        longitude : 經度（東經為正）
-        latitude  : 緯度（北緯為正）
-        timestamp : 拍攝時間字串，例如 "2024-07-01 15:00:00"
-        timezone  : 時區，例如 "Asia/Taipei"
-
-    輸出:
-        elevation_deg : 太陽高度角（度）
-        azimuth_deg   : 太陽方位角（度）
-    """
-    time = pd.DatetimeIndex([pd.Timestamp(timestamp, tz=timezone)])
     solar_pos = pvlib.solarposition.get_solarposition(
         time,
         latitude=latitude,
@@ -46,143 +139,82 @@ def get_solar_angles(longitude: float,
 def solar_angles_to_world_vector(elevation_deg: float,
                                  azimuth_deg: float) -> np.ndarray:
     """
-    將太陽高度角 / 方位角轉成世界座標下的太陽方向向量
-
-    世界座標採 ENU:
+    ENU:
         x = East
         y = North
         z = Up
 
-    NOAA / pvlib 的方位角定義:
-        0°   = 北
-        90°  = 東
-        180° = 南
-        270° = 西
-
-    輸出:
-        sun_vec_world : 單位向量，方向為「由場景指向太陽」
+    sun_vec_world = 場景 -> 太陽
     """
-    a = np.deg2rad(azimuth_deg)
-    e = np.deg2rad(elevation_deg)
+    a = deg2rad(azimuth_deg)
+    e = deg2rad(elevation_deg)
 
     sun_vec_world = np.array([
-        np.cos(e) * np.sin(a),  # x = East
-        np.cos(e) * np.cos(a),  # y = North
-        np.sin(e)               # z = Up
+        np.cos(e) * np.sin(a),
+        np.cos(e) * np.cos(a),
+        np.sin(e)
     ], dtype=np.float64)
 
-    norm = np.linalg.norm(sun_vec_world)
-    if norm == 0:
-        raise ValueError("太陽方向向量長度為 0，請檢查輸入參數。")
-
-    return sun_vec_world / norm
+    return normalize(sun_vec_world)
 
 
 def sun_world_to_light_world(sun_vec_world: np.ndarray) -> np.ndarray:
     """
-    將世界座標下的太陽方向向量，轉成世界座標下的光線方向向量
-
-    sun_vec_world:
-        場景 -> 太陽
-
-    light_vec_world:
-        太陽 -> 場景
+    light_vec_world = 太陽 → 地面
     """
-    light_vec_world = -sun_vec_world
-    norm = np.linalg.norm(light_vec_world)
-    if norm == 0:
-        raise ValueError("世界座標下的光線方向向量長度為 0。")
-    return light_vec_world / norm
+    return normalize(-sun_vec_world)
 
 
 def world_to_camera_light_vector(light_vec_world: np.ndarray,
-                                 heading_deg: float) -> np.ndarray:
-    """
-    將世界座標下的光線方向向量轉成相機座標下的光源方向向量
-
-    目前先只考慮 heading，不考慮 pitch / roll。
-
-    世界座標:
-        x = East
-        y = North
-        z = Up
-
-    相機座標:
-        x_cam = 右
-        y_cam = 上
-        z_cam = 前
-
-    heading 定義:
-        0°   = 朝北
-        90°  = 朝東
-        180° = 朝南
-        270° = 朝西
-    """
-    h = np.deg2rad(heading_deg)
-
-    # 相機在世界座標中的三個基底方向
-    forward = np.array([
-        np.sin(h),   # x = East
-        np.cos(h),   # y = North
-        0.0
-    ], dtype=np.float64)
-
-    right = np.array([
-        np.cos(h),
-        -np.sin(h),
-        0.0
-    ], dtype=np.float64)
-
-    up = np.array([0.0, 0.0, 1.0], dtype=np.float64)
-
-    x_cam = np.dot(light_vec_world, right)
-    y_cam = np.dot(light_vec_world, up)
-    z_cam = np.dot(light_vec_world, forward)
-
-    light_vec_camera = np.array([x_cam, y_cam, z_cam], dtype=np.float64)
-
-    norm = np.linalg.norm(light_vec_camera)
-    if norm == 0:
-        raise ValueError("相機座標下的光源方向向量長度為 0。")
-
-    return light_vec_camera / norm
+                                 heading_deg: float,
+                                 pitch_deg: float,
+                                 roll_deg: float) -> np.ndarray:
+    return world_to_camera_vector(
+        vec_world=light_vec_world,
+        heading_deg=heading_deg,
+        pitch_deg=pitch_deg,
+        roll_deg=roll_deg
+    )
 
 
 def run_light_engine(config_path: str) -> dict:
-    """
-    主功能：
-    讀取 config，輸出：
-        - elevation
-        - azimuth
-        - 世界座標下的太陽方向向量
-        - 世界座標下的光線方向向量
-        - 相機座標下的光源方向向量
-    """
-    config = load_config(config_path)
+    raw_config = load_config(config_path)
+    config = validate_config_contract(raw_config)
 
     longitude = config["location"]["longitude"]
     latitude = config["location"]["latitude"]
     timestamp = config["capture"]["timestamp"]
     timezone = config["capture"]["timezone"]
+
     heading = config["camera"]["heading"]
+    pitch = config["camera"].get("pitch", 0.0)
+    roll = config["camera"].get("roll", 0.0)
 
     elevation_deg, azimuth_deg = get_solar_angles(
-        longitude=longitude,
-        latitude=latitude,
-        timestamp=timestamp,
-        timezone=timezone
+        longitude,
+        latitude,
+        timestamp,
+        timezone
     )
 
+    if elevation_deg <= 0:
+        raise ValueError(
+            "Solar-only light direction is unavailable because the sun is below the "
+            f"horizon (elevation_deg={elevation_deg:.4f})."
+        )
+
     sun_vec_world = solar_angles_to_world_vector(
-        elevation_deg=elevation_deg,
-        azimuth_deg=azimuth_deg
+        elevation_deg,
+        azimuth_deg
     )
 
     light_vec_world = sun_world_to_light_world(sun_vec_world)
 
     light_vec_camera = world_to_camera_light_vector(
-        light_vec_world=light_vec_world,
-        heading_deg=heading
+        light_vec_world,
+        heading,
+        pitch,
+        roll
     )
 
     return {
@@ -190,5 +222,18 @@ def run_light_engine(config_path: str) -> dict:
         "azimuth_deg": azimuth_deg,
         "sun_vec_world": sun_vec_world,
         "light_vec_world": light_vec_world,
-        "light_vec_camera": light_vec_camera
+        "light_vec_camera": light_vec_camera,
+        "light_source_type": "solar",
+        "solar_provider": "pvlib",
     }
+
+
+if __name__ == "__main__":
+    result = run_light_engine("configs/config.yaml")
+
+    print("=== Light Engine Result ===")
+    print(f"elevation_deg   : {result['elevation_deg']:.4f}")
+    print(f"azimuth_deg     : {result['azimuth_deg']:.4f}")
+    print(f"sun_vec_world   : {result['sun_vec_world']}")
+    print(f"light_vec_world : {result['light_vec_world']}")
+    print(f"light_vec_camera: {result['light_vec_camera']}")

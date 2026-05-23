@@ -1,0 +1,45 @@
+api_key_env: OPENWEATHER_API_KEY
+api_base_url: https://api.openweathermap.org/data/2.5/weather
+units: metric
+
+output_weather_dir: data/intermediate/weather
+output_sg_dir: data/intermediate/sg_params
+
+default_cloudiness: 20
+default_visibility: 10000
+
+mode_thresholds:
+  sunny_cloud_max: 30
+  cloudy_cloud_max: 75
+
+visibility_thresholds:
+  high: 8000
+  medium: 3000
+
+sg_rules:
+  sunny:
+    direct_lambda: 100.0
+    direct_amplitude: 1.0
+    diffuse_lambda: 5.0
+    diffuse_amplitude: 0.2
+  cloudy:
+    direct_lambda: 50.0
+    direct_amplitude: 0.6
+    diffuse_lambda: 5.0
+    diffuse_amplitude: 0.5
+  overcast:
+    direct_lambda: 10.0
+    direct_amplitude: 0.2
+    diffuse_lambda: 3.0
+    diffuse_amplitude: 0.9
+
+visibility_adjustment:
+  low_visibility_direct_scale: 0.5
+  low_visibility_diffuse_boost: 0.2
+  medium_visibility_direct_scale: 0.8
+  medium_visibility_diffuse_boost: 0.1
+
+future_sources:
+  - pseudo_light
+  - noaa_openweather_rule_based
+  - shadowsg_refined

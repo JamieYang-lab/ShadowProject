@@ -1,0 +1,24 @@
+sg_light:
+  k: 2
+  lobe_format:
+    - mu_x
+    - mu_y
+    - mu_z
+    - lambda
+    - amplitude
+  direct:
+    type: direct
+    default_lambda: 80.0
+    default_amplitude: 1.0
+    min_amplitude: 0.0
+    max_amplitude: 1.0
+  diffuse:
+    type: diffuse
+    mu:
+      - 0.0
+      - 0.0
+      - 1.0
+    default_lambda: 5.0
+    default_amplitude: 0.3
+    min_amplitude: 0.0
+    max_amplitude: 1.0

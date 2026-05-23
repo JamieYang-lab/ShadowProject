@@ -1,0 +1,22 @@
+shadow_sketch:
+  output_resolution_policy: match_composite
+  blur_kernel_size: 21
+  ground_fallback: true
+  minimum_mask_area: 4
+  projection_length_scale: 1.5
+  num_projection_steps: 32
+
+sg_shadow_prior:
+  coarse_size: 64
+  angular_tolerance_deg: 5.0
+  min_object_area: 4
+  max_object_points: 512
+  max_receiver_points: 4096
+  hard_blur_kernel: 3
+  soft_blur_kernel: 31
+  lambda_hard_threshold: 80.0
+  lambda_soft_threshold: 5.0
+  min_mu_z: 0.1
+  max_forward_distance_base: 3.0
+  normalize_output: true
+  save_per_lobe_debug: true

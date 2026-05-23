@@ -1,0 +1,10 @@
+metadata_sg:
+  weather_config: configs/weather_config.yaml
+  output_sg_dir: data/intermediate/sg_params
+  coordinate_frame: camera
+  source: noaa_openweather_rule_based
+  offline_defaults:
+    cloudiness: 20
+    visibility: 10000
+    weather_main: Clear
+    weather_description: manual/offline

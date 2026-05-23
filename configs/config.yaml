@@ -3,8 +3,11 @@ location:
   latitude: 25.0330
 
 capture:
+  # Local time in YYYY-MM-DD HH:MM:SS format. Timezone must be provided separately.
   timestamp: "2024-07-01 15:00:00"
   timezone: "Asia/Taipei"
 
 camera:
   heading: 90.0
+  pitch: 0.0
+  roll: 0.0
